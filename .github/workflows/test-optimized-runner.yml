@@ -3,7 +3,7 @@ name: 🧪 Test Optimized Runner with Containerd
 on:
   workflow_dispatch:  # Permite executar manualmente
   push:
-    branches: [ main ]
+    branches: [ master ]
 
 jobs:
   test-containerd-runner:
