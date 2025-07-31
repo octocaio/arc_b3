@@ -1,0 +1,50 @@
+# Dockerfile customizado para GitHub Actions Runner
+# Objetivo: Usar bind mount do socket Docker em vez de Docker-in-Docker (DinD)
+
+FROM ghcr.io/actions/actions-runner:latest
+
+# Mudar para root para instalar dependências
+USER root
+
+# Atualizar pacotes, instalar Docker CLI (sem daemon) e limpar cache
+RUN apt-get update && \
+    apt-get install -y \
+    build-essential \
+    curl \
+    docker.io \
+    git \
+    jq \
+    && rm -rf /var/lib/apt/lists/* \
+    && docker --version \
+    && usermod -aG docker runner \
+    && mkdir -p /home/runner/scripts
+
+# Script para verificar acesso ao Docker
+COPY <<EOF /home/runner/scripts/test-docker.sh
+#!/bin/bash
+echo "=== Testing Docker Access ==="
+echo "Docker version:"
+docker --version
+echo ""
+echo "Docker info:"
+docker info
+echo ""
+echo "Testing container run:"
+docker run --rm alpine:latest echo "Docker is working via bind mount!"
+EOF
+
+# Configurar permissões do script
+RUN chmod +x /home/runner/scripts/test-docker.sh && \
+    chown runner:runner /home/runner/scripts/test-docker.sh
+
+# Voltar para usuário runner
+USER runner
+
+# Verificar se runner está no grupo docker
+RUN groups
+
+# Labels para identificar a imagem
+LABEL org.opencontainers.image.title="GitHub Actions Runner - Docker Socket Optimized"
+LABEL org.opencontainers.image.description="GitHub Actions Runner usando bind mount do socket Docker para melhor performance"
+LABEL org.opencontainers.image.version="1.0"
+LABEL maintainer="octocaio"

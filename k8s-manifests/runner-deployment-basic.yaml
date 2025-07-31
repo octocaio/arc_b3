@@ -1,0 +1,38 @@
+apiVersion: actions.summerwind.dev/v1alpha1
+kind: RunnerDeployment
+metadata:
+  name: test-runner
+  namespace: github-runners
+spec:
+  # Configuração básica para teste
+  replicas: 1
+  
+  template:
+    spec:
+      # Configuração da organização GitHub
+      organization: octocaio
+      
+      # Configuração de autenticação via secret
+      env:
+        - name: GITHUB_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: github-auth
+              key: token
+      
+      # Imagem base do runner (vamos customizar depois)
+      image: summerwind/actions-runner:latest
+      
+      # Labels para identificar este runner
+      labels:
+        - arc-test
+        - kubernetes
+        
+      # Configurações de recursos
+      resources:
+        requests:
+          cpu: 100m
+          memory: 128Mi
+        limits:
+          cpu: 500m
+          memory: 512Mi

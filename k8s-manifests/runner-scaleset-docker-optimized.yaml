@@ -1,0 +1,50 @@
+# RunnerDeployment otimizado com bind mount do Docker socket
+apiVersion: actions.summerwind.dev/v1alpha1
+kind: RunnerDeployment
+metadata:
+  name: arc-runner-docker-optimized
+  namespace: actions-runner-system
+spec:
+  replicas: 2
+  template:
+    spec:
+      # GitHub configuration
+      organization: octocaio
+      
+      # 🔑 CONFIGURAÇÃO DA IMAGEM CUSTOMIZADA
+      image: aksarctestregistry.azurecr.io/arc-runner-optimized:amd64
+      
+      # 🔑 DESABILITAR DOCKER-IN-DOCKER (usar socket do host)
+      dockerEnabled: false  # Não usar DinD
+      dockerdWithinRunnerContainer: false  # Não executar dockerd dentro do container
+      
+      # 🔑 VOLUME MOUNTS PARA O SOCKET CONTAINERD (AKS Reality)
+      volumeMounts:
+      - name: containerd-sock
+        mountPath: /run/containerd/containerd.sock
+        readOnly: false
+      
+      # 🔑 VOLUMES - BIND MOUNT DO SOCKET CONTAINERD
+      volumes:
+      - name: containerd-sock
+        hostPath:
+          path: /run/containerd/containerd.sock
+          type: Socket
+      
+      # Contexto de segurança do pod
+      securityContext:
+        runAsUser: 1001    # Usuário runner
+        runAsGroup: 999    # Grupo docker
+        fsGroup: 999       # Acesso ao socket
+      
+      # Variáveis de ambiente
+      env:
+      - name: CONTAINERD_ADDRESS
+        value: "/run/containerd/containerd.sock"
+      - name: RUNNER_NAME_PREFIX  
+        value: "arc-optimized"
+        
+      # Labels para identificação
+      labels:
+      - "docker-optimized"
+      - "bind-mount"

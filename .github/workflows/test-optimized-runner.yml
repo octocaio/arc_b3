@@ -1,0 +1,49 @@
+name: 🧪 Test Optimized Runner with Containerd
+
+on:
+  workflow_dispatch:  # Permite executar manualmente
+  push:
+    branches: [ main ]
+
+jobs:
+  test-containerd-runner:
+    runs-on: [self-hosted, docker-optimized, bind-mount]  # Usar nosso runner otimizado
+    
+    steps:
+    - name: 📋 Checkout code
+      uses: actions/checkout@v4
+      
+    - name: 🔍 Check runner environment
+      run: |
+        echo "=== RUNNER INFO ==="
+        echo "Runner name: $RUNNER_NAME"
+        echo "OS: $(uname -a)"
+        echo "Architecture: $(uname -m)"
+        
+    - name: 🐳 Check containerd socket
+      run: |
+        echo "=== CONTAINERD SOCKET ==="
+        ls -la /run/containerd/ || echo "No containerd directory"
+        ls -la /run/containerd/containerd.sock || echo "No containerd socket"
+        
+    - name: 🐳 Test Docker CLI with containerd
+      run: |
+        echo "=== DOCKER INFO ==="
+        docker version || echo "Docker not available"
+        docker info || echo "Docker info failed"
+        
+    - name: 🚀 Test container operations
+      run: |
+        echo "=== CONTAINER TEST ==="
+        echo "Testing basic container operations..."
+        docker run --rm hello-world || echo "Container test failed"
+        
+    - name: 📊 Performance check
+      run: |
+        echo "=== PERFORMANCE ==="
+        echo "CPU info:"
+        cat /proc/cpuinfo | grep "model name" | head -1
+        echo "Memory info:"
+        free -h
+        echo "Disk info:"
+        df -h /
