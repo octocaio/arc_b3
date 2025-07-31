@@ -39,6 +39,11 @@ spec:
       
       # Variáveis de ambiente
       env:
+      - name: GITHUB_TOKEN
+        valueFrom:
+          secretKeyRef:
+            key: token
+            name: github-auth
       - name: CONTAINERD_ADDRESS
         value: "/run/containerd/containerd.sock"
       - name: RUNNER_NAME_PREFIX  
