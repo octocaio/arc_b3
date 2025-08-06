@@ -72,46 +72,75 @@ Configurações Implementadas:
 - [ ] Implementar security contexts apropriados
 - [ ] Testar acesso ao Docker do host
 
-## Fase 3: Implementação da Solução Docker Optimizada
+## Fase 3: Implementação da Solução Containerd Optimizada
 
-### 3.1 Container Image Customizada
+### 3.1 Descoberta Importante: AKS usa containerd
+- ✅ **Identificado**: AKS usa `containerd://1.7.27-1` não Docker daemon
+- ✅ **Socket confirmado**: `/run/containerd/containerd.sock` existe
+- ✅ **Estratégia ajustada**: Usar containerd com ferramentas compatíveis
+
+### 3.2 Container Image Customizada
 ```dockerfile
-# Exemplo da estrutura do Dockerfile
+# Dockerfile ajustado para trabalhar com containerd
 FROM ghcr.io/actions/actions-runner:latest
 USER root
-# Instalar Docker CLI (sem Docker daemon)
-RUN apt-get update && apt-get install -y docker.io
-# Configurar permissões para acessar socket
-RUN usermod -aG docker runner
+
+# Instalar ferramentas para trabalhar com containerd
+RUN apt-get update && \
+    apt-get install -y \
+    containerd \
+    buildah \
+    skopeo \
+    docker.io \
+    && rm -rf /var/lib/apt/lists/*
+
+# Configurar Docker CLI para usar containerd (via dockerd-rootless)
+# Ou usar alternativas como nerdctl
 USER runner
 ```
 
-### 3.2 RunnerScaleSet Configuration
+### 3.3 Opções de Estratégia para Containerd
+
+**Opção A: Docker CLI + containerd (via CRI)**
+- Usar Docker CLI com containerd como backend
+- Requer configuração específica
+
+**Opção B: Ferramentas nativas (nerdctl, buildah)**
+- ✅ Instalar `nerdctl` (Docker-compatible CLI para containerd)
+- ✅ Usar `buildah` para builds
+- ✅ Melhor compatibilidade com containerd
+
+**Opção C: Kaniko para builds**
+- Builds em containers sem privilégios
+- Ideal para pipelines CI/CD
+
+### 3.4 RunnerScaleSet Configuration (atual)
 ```yaml
-# Configuração para bind mount do socket Docker
+# Configuração para bind mount do socket containerd
 spec:
   template:
     spec:
       containers:
       - name: runner
         volumeMounts:
-        - name: docker-sock
-          mountPath: /var/run/docker.sock
+        - name: containerd-sock
+          mountPath: /run/containerd/containerd.sock
         securityContext:
           privileged: false
-          runAsUser: 1000
+          runAsUser: 1001
       volumes:
-      - name: docker-sock
+      - name: containerd-sock
         hostPath:
-          path: /var/run/docker.sock
+          path: /run/containerd/containerd.sock
           type: Socket
 ```
 
-### 3.3 Configurações de Segurança
+### 3.5 Configurações de Segurança
 - [ ] Implementar Pod Security Standards
-- [ ] Configurar Network Policies
+- [ ] Configurar Network Policies  
 - [ ] Implementar RBAC granular
 - [ ] Configurar monitoring e logging
+- [ ] Ajustar security context para containerd
 
 ## Fase 4: Testes e Validação
 

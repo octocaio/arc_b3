@@ -1,0 +1,85 @@
+name: Test ARC Containerd Runner
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+jobs:
+  test-containerd:
+    runs-on: 
+      - self-hosted
+      - containerd-optimized
+      - nerdctl-ready
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: System info
+      run: |
+        echo "=== System Information ==="
+        uname -a
+        whoami
+        id
+        pwd
+        echo ""
+        
+        echo "=== Environment Variables ==="
+        env | sort
+        echo ""
+        
+        echo "=== Containerd Socket ==="
+        ls -la /run/containerd/
+        echo ""
+        
+        echo "=== nerdctl Version ==="
+        nerdctl --address=/run/containerd/containerd.sock version
+        echo ""
+        
+        echo "=== Docker alias Version ==="
+        docker version
+        echo ""
+    
+    - name: Test containerd container operations
+      run: |
+        echo "=== Testing container operations with nerdctl ==="
+        
+        # Pull image
+        nerdctl --address=/run/containerd/containerd.sock --namespace=k8s.io pull alpine:latest
+        
+        # Run simple container
+        nerdctl --address=/run/containerd/containerd.sock --namespace=k8s.io run --rm alpine:latest echo "Hello from containerd!"
+        
+        # List images
+        nerdctl --address=/run/containerd/containerd.sock --namespace=k8s.io images
+        
+        echo ""
+        echo "=== Testing with docker alias ==="
+        
+        # Test docker alias
+        docker run --rm alpine:latest echo "Hello from docker alias!"
+        
+        # List images via alias
+        docker images
+        
+    - name: Test build operation
+      run: |
+        echo "=== Testing build capabilities ==="
+        
+        # Create simple Dockerfile
+        cat > Dockerfile.test << 'EOF'
+        FROM alpine:latest
+        RUN echo "Test build from ARC containerd runner!"
+        CMD ["echo", "Built successfully!"]
+        EOF
+        
+        # Build image with nerdctl
+        nerdctl --address=/run/containerd/containerd.sock --namespace=k8s.io build -t test-build:latest -f Dockerfile.test .
+        
+        # Run built image
+        nerdctl --address=/run/containerd/containerd.sock --namespace=k8s.io run --rm test-build:latest
+        
+        # Clean up
+        nerdctl --address=/run/containerd/containerd.sock --namespace=k8s.io rmi test-build:latest
+        rm Dockerfile.test

@@ -1,0 +1,26 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: debug-runner
+  namespace: actions-runner-system
+spec:
+  containers:
+  - name: runner
+    image: aksarctestregistry.azurecr.io/arc-runner-containerd:latest
+    command: ["/bin/bash"]
+    args: ["-c", "sleep 300"]
+    volumeMounts:
+    - name: containerd-sock
+      mountPath: /run/containerd/containerd.sock
+      readOnly: false
+    env:
+    - name: CONTAINERD_ADDRESS
+      value: "/run/containerd/containerd.sock"
+    - name: CONTAINERD_NAMESPACE
+      value: "k8s.io"
+  volumes:
+  - name: containerd-sock
+    hostPath:
+      path: /run/containerd/containerd.sock
+      type: Socket
+  restartPolicy: Never

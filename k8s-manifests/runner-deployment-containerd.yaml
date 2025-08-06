@@ -1,0 +1,67 @@
+# RunnerDeployment otimizado com containerd e nerdctl
+apiVersion: actions.summerwind.dev/v1alpha1
+kind: RunnerDeployment
+metadata:
+  name: arc-runner-containerd
+  namespace: actions-runner-system
+spec:
+  replicas: 1
+  template:
+    spec:
+      # GitHub configuration
+      organization: octocaio
+      
+      # 🔑 CONFIGURAÇÃO DA IMAGEM COM CONTAINERD
+      image: aksarctestregistry.azurecr.io/arc-runner-containerd:v2
+      
+      # 🔑 DESABILITAR DOCKER-IN-DOCKER (usar socket do host)
+      dockerEnabled: false
+      dockerdWithinRunnerContainer: false
+      
+      # 🔑 VOLUME MOUNTS PARA O SOCKET CONTAINERD
+      volumeMounts:
+      - name: containerd-sock
+        mountPath: /run/containerd/containerd.sock
+        readOnly: false
+      
+      # 🔑 VOLUMES - BIND MOUNT DO SOCKET CONTAINERD
+      volumes:
+      - name: containerd-sock
+        hostPath:
+          path: /run/containerd/containerd.sock
+          type: Socket
+      
+      # Contexto de segurança do pod (privileged para acesso ao containerd socket)
+      securityContext:
+        runAsUser: 0       # Executar como root para acessar containerd socket
+        runAsGroup: 0      # Grupo root
+        fsGroup: 0         # Acesso ao socket
+      
+      # Variáveis de ambiente
+      env:
+      - name: GITHUB_TOKEN
+        valueFrom:
+          secretKeyRef:
+            key: token
+            name: github-auth
+      - name: CONTAINERD_ADDRESS
+        value: "/run/containerd/containerd.sock"
+      - name: CONTAINERD_NAMESPACE
+        value: "k8s.io"
+      - name: RUNNER_NAME_PREFIX  
+        value: "containerd-opt"
+      
+      # Labels específicas para este runner
+      labels:
+      - "containerd-optimized"
+      - "nerdctl-ready"
+      - "bind-mount-socket"
+      
+      # Resource constraints
+      resources:
+        limits:
+          cpu: "2"
+          memory: "4Gi"
+        requests:
+          cpu: "1"
+          memory: "2Gi"

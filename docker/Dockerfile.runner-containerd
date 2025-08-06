@@ -1,0 +1,103 @@
+# Dockerfile customizado para GitHub Actions Runner com containerd
+# Objetivo: Usar nerdctl + containerd em vez de Docker-in-Docker (DinD)
+
+FROM ghcr.io/actions/actions-runner:latest
+
+# Mudar para root para instalar dependências
+USER root
+
+# Instalar nerdctl (Docker-compatible CLI for containerd)
+ARG NERDCTL_VERSION=1.7.7
+RUN apt-get update && \
+    apt-get install -y \
+    build-essential \
+    curl \
+    git \
+    jq \
+    ca-certificates \
+    wget \
+    && rm -rf /var/lib/apt/lists/*
+
+# Download e instalar nerdctl
+RUN wget -O nerdctl.tar.gz https://github.com/containerd/nerdctl/releases/download/v${NERDCTL_VERSION}/nerdctl-${NERDCTL_VERSION}-linux-amd64.tar.gz && \
+    tar -xzf nerdctl.tar.gz -C /usr/local/bin/ && \
+    rm nerdctl.tar.gz && \
+    chmod +x /usr/local/bin/nerdctl
+
+# Criar alias docker para nerdctl para compatibilidade
+RUN echo '#!/bin/bash\nnerdctl --address=/run/containerd/containerd.sock --namespace=k8s.io "$@"' > /usr/local/bin/docker && \
+    chmod +x /usr/local/bin/docker
+
+# Instalar buildkit para builds (se necessário)
+ARG BUILDKIT_VERSION=0.16.0
+RUN wget -O buildkit.tar.gz https://github.com/moby/buildkit/releases/download/v${BUILDKIT_VERSION}/buildkit-v${BUILDKIT_VERSION}.linux-amd64.tar.gz && \
+    tar -xzf buildkit.tar.gz -C /usr/local/ && \
+    rm buildkit.tar.gz
+
+# Criar diretório para scripts
+RUN mkdir -p /home/runner/scripts
+
+# Script para verificar acesso ao containerd
+COPY <<EOF /home/runner/scripts/test-containerd.sh
+#!/bin/bash
+echo "=== Testing Containerd Access ==="
+echo "nerdctl version:"
+nerdctl --address=/run/containerd/containerd.sock version || echo "nerdctl version failed"
+echo ""
+echo "containerd info:"
+nerdctl --address=/run/containerd/containerd.sock --namespace=k8s.io info || echo "containerd info failed"
+echo ""
+echo "Testing container run with nerdctl:"
+nerdctl --address=/run/containerd/containerd.sock --namespace=k8s.io run --rm alpine:latest echo "Containerd is working via bind mount!" || echo "Container run failed"
+echo ""
+echo "Testing with docker alias:"
+docker version || echo "Docker alias failed"
+docker run --rm alpine:latest echo "Docker alias is working!" || echo "Docker alias run failed"
+EOF
+
+# Script de inicialização personalizada
+COPY <<EOF /home/runner/scripts/init-containerd.sh
+#!/bin/bash
+echo "=== Initializing containerd environment ==="
+
+# Verificar se o socket existe
+if [ ! -S "/run/containerd/containerd.sock" ]; then
+    echo "ERROR: containerd socket not found at /run/containerd/containerd.sock"
+    exit 1
+fi
+
+# Testar acesso básico
+echo "Testing containerd access..."
+nerdctl --address=/run/containerd/containerd.sock version > /dev/null 2>&1
+if [ $? -eq 0 ]; then
+    echo "✅ containerd access OK"
+else
+    echo "❌ containerd access failed"
+fi
+
+# Configurar variáveis de ambiente
+export CONTAINERD_ADDRESS=/run/containerd/containerd.sock
+export CONTAINERD_NAMESPACE=k8s.io
+
+echo "Environment ready for containerd operations"
+EOF
+
+# Configurar permissões dos scripts
+RUN chmod +x /home/runner/scripts/test-containerd.sh && \
+    chmod +x /home/runner/scripts/init-containerd.sh && \
+    chown -R runner:runner /home/runner/scripts
+
+# Permanecer como root para acesso ao containerd socket
+# USER runner
+
+# Verificar instalações (executando como root)
+RUN nerdctl --version && \
+    which docker && \
+    echo "Root user configured for containerd operations"
+
+# Labels para identificar a imagem
+LABEL org.opencontainers.image.title="GitHub Actions Runner - Containerd Optimized"
+LABEL org.opencontainers.image.description="GitHub Actions Runner usando nerdctl + containerd para melhor performance"
+LABEL org.opencontainers.image.version="2.0"
+LABEL maintainer="octocaio"
+LABEL containerd.version=${NERDCTL_VERSION}
